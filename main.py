@@ -2,8 +2,30 @@
 #YouTube MP4 downloader
 
 #Setting the modules  and window
+import os
+import re
 import customtkinter
 import yt_dlp
+
+YOUTUBE_URL_RE = re.compile(
+    r'^(https?://)?(www\.)?(youtube\.com/(watch\?v=|shorts/)|youtu\.be/)',
+    re.IGNORECASE,
+)
+
+# Google search result pages sometimes link to a video via a "vid:<id>" reference
+# (e.g. in the #fpstate=ive fragment) instead of a real YouTube URL.
+GOOGLE_VIDEO_ID_RE = re.compile(r'vid:([a-zA-Z0-9_-]{11})')
+
+
+def resolve_youtube_url(url):
+    if YOUTUBE_URL_RE.match(url):
+        return url
+
+    match = GOOGLE_VIDEO_ID_RE.search(url)
+    if match:
+        return f'https://www.youtube.com/watch?v={match.group(1)}'
+
+    return None
 
 window = customtkinter.CTk()
 window.minsize(1000,1000)
@@ -34,14 +56,24 @@ def progress_hook(d):
 
 # Setting the MP4 downloader
 def downlad_btn ():
-    url = url_entry.get()
+    url = url_entry.get().strip()
     if not url:
-        print("please enter a valid URL ")
+        percentage_label.configure(text="Please enter a URL", text_color='red')
         return
+
+    resolved_url = resolve_youtube_url(url)
+    if not resolved_url:
+        percentage_label.configure(
+            text="That's not a YouTube video URL", text_color='red'
+        )
+        return
+
+    percentage_label.configure(text="0%", text_color=('black', 'white'))
+    progress_bar.set(0)
 
     options = {
         'format': 'best',
-        'outtmpl': r'C:\Users\ynsem\Downloads\%(title)s.%(ext)s',
+        'outtmpl': os.path.join(os.path.expanduser('~'), 'Downloads', '%(title)s.%(ext)s'),
         'noplaylist': True,
         'progress_hooks': [progress_hook],
         # ADD THIS LINE TO FIX THE 403 ERROR:
@@ -50,10 +82,11 @@ def downlad_btn ():
 
     try:
          with yt_dlp.YoutubeDL(options) as yt_dl:
-            yt_dl.download([url])
+            yt_dl.download([resolved_url])
             print("success!")
     except Exception as e:
         print(f"Download failed: {e}")
+        percentage_label.configure(text="Download failed - check the URL", text_color='red')
 
 #Setting the UI
 
